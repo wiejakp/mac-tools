@@ -1,0 +1,15 @@
+# Local output and disposable verification fixtures.
+/logs/*
+!/logs/.gitkeep
+/tests/.clean-sites-test-*/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.DS_Store
+.env
+.env.*
+!.env.example
