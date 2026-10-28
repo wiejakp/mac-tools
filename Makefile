@@ -1,9 +1,9 @@
 PYTHON ?= /usr/bin/python3
 
-.PHONY: help test check verify preview-logs preview-cache
+.PHONY: help test check verify preview-logs preview-cache preview-mounts
 
 help:
-	@printf '%s\n' 'make verify        Shell syntax, Python syntax and fixture tests' 'make preview-logs  Preview app log cleanup' 'make preview-cache Preview app cache cleanup'
+	@printf '%s\n' 'make verify         Shell syntax, Python syntax and fixture tests' 'make preview-logs   Preview app log cleanup' 'make preview-cache  Preview app cache cleanup' 'make preview-mounts Show configured drives without connecting'
 
 test:
 	$(PYTHON) -B -m unittest discover -s tests -v
@@ -13,6 +13,12 @@ check:
 	/bin/sh -n clear-cache.sh
 	/bin/sh -n 'launchers/Clear Logs.command'
 	/bin/sh -n 'launchers/Clear Cache.command'
+	/bin/sh -n mount.sh
+	/bin/sh -n mount-home.sh
+	/bin/sh -n mount-cch.sh
+	/bin/sh -n 'launchers/Mount All.command'
+	/bin/sh -n 'launchers/Mount Home.command'
+	/bin/sh -n 'launchers/Mount CCH.command'
 	$(PYTHON) -B -c "import ast; from pathlib import Path; files = list(Path('src').rglob('*.py')) + list(Path('tests').glob('*.py')); [ast.parse(p.read_text(), filename=str(p)) for p in files]; print('Python syntax: OK')"
 
 verify: check test
@@ -22,3 +28,6 @@ preview-logs:
 
 preview-cache:
 	./clear-cache.sh --dry-run
+
+preview-mounts:
+	./mount.sh --dry-run

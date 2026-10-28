@@ -79,13 +79,21 @@ class Plan:
 class Stats:
     files: int = 0
     bytes: int = 0
+    reclaimable_bytes: int = 0
     directories: int = 0
     skipped: int = 0
     errors: int = 0
 
 
-def event(report, level, message):
-    report({"level": level, "message": str(message)})
+@dataclass(frozen=True)
+class DiskSpace:
+    total: int
+    used: int
+    free: int
+
+
+def event(report, level, message, **details):
+    report({"level": level, "message": str(message), **details})
 
 
 def cloud_name(name):
@@ -115,6 +123,18 @@ def open_directory(path):
     except BaseException:
         os.close(fd)
         raise
+
+
+def read_disk_usage(root):
+    """Measure the root's filesystem through a descriptor, never a symlink."""
+    try:
+        fd = open_directory(root)
+        try:
+            return DiskSpace(*shutil.disk_usage(fd))
+        finally:
+            os.close(fd)
+    except (OSError, UnsafePath):
+        return None
 
 
 def identity(fd):
@@ -225,13 +245,17 @@ def execute_plan(plan, dry_run, report):
 
         def remove_file(parent_fd, name, relative, info):
             if dry_run:
-                action = "WOULD REMOVE"
+                action = "PREVIEW"
             else:
                 os.unlink(name, dir_fd=parent_fd)
                 action = "REMOVE"
             stats.files += 1
             stats.bytes += info.st_size
-            event(report, action, "{}  ({})".format(relative, human_size(info.st_size)))
+            # st_blocks uses 512-byte units, including sparse-file allocation.
+            # Shared links or files on other volumes cannot inflate this estimate.
+            if info.st_dev == plan.identity[0] and info.st_nlink == 1:
+                stats.reclaimable_bytes += max(0, getattr(info, "st_blocks", 0)) * 512
+            event(report, action, "{}  ({})".format(relative, human_size(info.st_size)), files=stats.files, bytes=stats.bytes)
 
         def empty_directory(directory_fd, relative):
             empty = True
@@ -271,8 +295,8 @@ def execute_plan(plan, dry_run, report):
             return empty
 
         for number, target in enumerate(plan.targets, 1):
-            before_files, before_bytes = stats.files, stats.bytes
-            event(report, "TARGET", "[{}/{}] {}  {}".format(number, len(plan.targets), target.kind, target.relative))
+            before_files, before_bytes, before_errors = stats.files, stats.bytes, stats.errors
+            event(report, "TARGET", "[{}/{}] {}  {}".format(number, len(plan.targets), target.kind, target.relative), dry_run=dry_run)
             parent_fd = os.dup(root_fd)
             try:
                 components = Path(target.relative).parts
@@ -302,7 +326,9 @@ def execute_plan(plan, dry_run, report):
                 problem(target.relative, error)
             finally:
                 os.close(parent_fd)
-            event(report, "DONE", "{} files / {}{}".format(stats.files - before_files, human_size(stats.bytes - before_bytes), " planned" if dry_run else " removed"))
+            event(report, "DONE", "{} files / {}{}".format(stats.files - before_files, human_size(stats.bytes - before_bytes), " measured" if dry_run else " removed"),
+                  directory=target.relative if target.directory else Path(target.relative).parent.as_posix(),
+                  files=stats.files - before_files, bytes=stats.bytes - before_bytes, errors=stats.errors - before_errors)
     finally:
         os.close(root_fd)
     return stats
@@ -321,22 +347,45 @@ def printable(value):
 
 
 class Display:
-    COLORS = {"APP": "36", "TARGET": "1;36", "DONE": "32", "ERROR": "31", "SKIP": "33", "KEEP": "90", "REMOVE": "90", "WOULD REMOVE": "90", "INFO": "37"}
+    COLORS = {"ERROR": "31", "INFO": "37"}
 
     def __init__(self):
-        self.color = sys.stdout.isatty() and "NO_COLOR" not in os.environ and os.environ.get("TERM") != "dumb"
+        self.tty = sys.stdout.isatty() and os.environ.get("TERM") != "dumb"
+        self.color = self.tty and "NO_COLOR" not in os.environ
         self.log = None
         self.progress_at = 0.0
         self.progress_visible = False
+        self.progress_width = 0
         self.file_events = 0
+        self.app_events = 0
+        self.error_events = 0
+        self.directory_totals = {}
 
     def paint(self, text, color):
         return "\033[{}m{}\033[0m".format(color, text) if self.color else text
 
     def clear_progress(self):
         if self.progress_visible:
-            sys.stdout.write("\r\033[2K")
+            sys.stdout.write("\r" + " " * self.progress_width + "\r")
+            sys.stdout.flush()
             self.progress_visible = False
+            self.progress_width = 0
+
+    def update_progress(self, text):
+        if not self.tty:
+            return
+        now = time.monotonic()
+        if self.progress_visible and now - self.progress_at < 0.08:
+            return
+        self.progress_at = now
+        columns = max(20, shutil.get_terminal_size((100, 30)).columns - 2)
+        text = printable(text)
+        if len(text) > columns:
+            text = text[:columns - 1] + "…"
+        sys.stdout.write("\r" + self.paint(text.ljust(min(columns, self.progress_width)), "90"))
+        sys.stdout.flush()
+        self.progress_visible = True
+        self.progress_width = len(text)
 
     def open_log(self, path):
         parent_fd = open_directory(path.parent)
@@ -374,23 +423,100 @@ class Display:
         level, message = record["level"], printable(record["message"])
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.write_log("{} {:<12} {}\n".format(timestamp, level, message))
-        # Every file goes to the report; Terminal stays readable and responsive.
-        if level in ("REMOVE", "WOULD REMOVE") and self.color:
-            self.file_events += 1
-            now = time.monotonic()
-            if now - self.progress_at < 0.08:
-                return
-            self.progress_at = now
-            columns = max(40, shutil.get_terminal_size((100, 30)).columns - 2)
-            text = "  {} files processed  ·  {}".format(self.file_events, message)
-            self.clear_progress()
-            sys.stdout.write(self.paint(text[:columns], "90") + "\r")
-            sys.stdout.flush()
-            self.progress_visible = True
+        # Detailed events stay in the report; only one live status line changes.
+        if level == "APP":
+            self.app_events += 1
+            self.update_progress("  Discovering apps · {:,} · {}".format(self.app_events, message))
             return
+        if level == "TARGET":
+            self.update_progress("  {} {}".format("Measuring" if record.get("dry_run") else "Cleaning", message))
+            return
+        if level in ("REMOVE", "PREVIEW"):
+            self.file_events = record.get("files", self.file_events + 1)
+            self.update_progress("  {} {:,} files · {} · {}".format("Removed" if level == "REMOVE" else "Measured", self.file_events, human_size(record.get("bytes", 0)), message))
+            return
+        if level == "DONE":
+            directory = record.get("directory")
+            if directory is not None:
+                totals = self.directory_totals.setdefault(directory, {"files": 0, "bytes": 0, "errors": 0})
+                for key in totals:
+                    totals[key] += record.get(key, 0)
+            return
+        if level in ("KEEP", "SKIP"):
+            return
+        if level == "ERROR":
+            self.error_events += 1
+            if self.error_events > 3:
+                return
         self.clear_progress()
-        label = self.paint("{:<12}".format(level), self.COLORS.get(level, "37"))
+        label = self.paint("{:<7}".format(level), self.COLORS.get(level, "37"))
         print("  {}  {}  {}".format(self.paint(timestamp, "90"), label, message), flush=True)
+
+    def show_summary(self):
+        self.clear_progress()
+        rows = sorted(((printable(path), totals) for path, totals in self.directory_totals.items() if totals["files"] or totals["errors"]), key=lambda row: (-row[1]["bytes"], row[0]))
+        if not rows:
+            print("\n  No eligible files found.")
+            return
+        terminal = shutil.get_terminal_size((100, 30))
+        columns = max(40, terminal.columns)
+        header = ["", "  DIRECTORY SUMMARY · largest first", "  {:>9}  {:>11}  DIRECTORY".format("FILES", "SIZE"), "  " + "─" * (columns - 4)]
+        full_rows = ["  {:>9,}  {:>11}  {}".format(totals["files"], human_size(totals["bytes"]), path) for path, totals in rows]
+        full_summary = "\n".join(header + full_rows) + "\n"
+        self.write_log(full_summary)
+        limit = max(3, min(20, terminal.lines - 24))
+        visible = []
+        for path, totals in rows[:limit]:
+            prefix = "  {:>9,}  {:>11}  ".format(totals["files"], human_size(totals["bytes"]))
+            available = max(8, columns - len(prefix) - 2)
+            if len(path) > available:
+                first = available // 2
+                path = path[:first] + "…" + path[-(available - first - 1):]
+            visible.append(prefix + path)
+        print("\n".join(header + visible), flush=True)
+        if len(rows) > limit:
+            print("  … {:,} smaller directories included in totals.".format(len(rows) - limit))
+
+    def show_disk_summary(self, before, stats, dry_run, after=None):
+        self.clear_progress()
+        savings = stats.reclaimable_bytes
+        if before is not None:
+            savings = min(savings, before.used)
+            if dry_run:
+                after = DiskSpace(before.total, before.used - savings, min(before.total, before.free + savings))
+        capacity = before if before is not None else after
+
+        def used(usage):
+            if usage is None:
+                return "unavailable"
+            percentage = 100 * usage.used / usage.total if usage.total else 0.0
+            return "{} ({:.1f}%)".format(human_size(usage.used), percentage)
+
+        def free(usage):
+            return human_size(usage.free) if usage is not None else "unavailable"
+
+        lines = [
+            "",
+            "  DISK SPACE · capacity {}".format(human_size(capacity.total) if capacity is not None else "unavailable"),
+            "  {:<19}{:>23}{:>23}".format("", "NOW" if dry_run else "BEFORE", "AFTER (EST.)" if dry_run else "AFTER"),
+            "  {:<19}{:>23}{:>23}".format("Used", used(before), used(after)),
+            "  {:<19}{:>23}{:>23}".format("Free", free(before), free(after)),
+            "  {:<25} {}".format("File data selected" if dry_run else "File data removed", human_size(stats.bytes)),
+        ]
+        if dry_run:
+            lines.append("  {:<25} {}".format("Estimated savings", human_size(savings)))
+        else:
+            change = "unavailable"
+            label = "Space saved"
+            if before is not None and after is not None:
+                delta = after.free - before.free
+                change = ("+" if delta > 0 else "-" if delta < 0 else "") + human_size(abs(delta)) + " (measured)"
+                if delta < 0:
+                    label = "Free space change"
+            lines.append("  {:<25} {}".format(label, change))
+        text = "\n".join(lines)
+        self.write_log(text + "\n")
+        print(text, flush=True)
 
     def banner(self, root, kind):
         print()
@@ -415,18 +541,18 @@ def main():
     parser = argparse.ArgumentParser(description="Clean application logs or regenerable caches under ~/sites.")
     parser.add_argument("--kind", choices=("logs", "cache"), required=True, help=argparse.SUPPRESS)
     modes = parser.add_mutually_exclusive_group()
-    modes.add_argument("--dry-run", action="store_true", help="preview without changing application files")
+    modes.add_argument("--dry-run", action="store_true", help="preview directory counts and sizes without changing application files")
     modes.add_argument("--yes", action="store_true", help="clean immediately without the menu")
     parser.add_argument("--version", action="version", version="Sites Cleaner " + VERSION)
     args = parser.parse_args()
     interactive = sys.stdin.isatty() and sys.stdout.isatty()
-    pause = interactive and not (args.dry_run or args.yes)
     ui = Display()
     root = Path.home() / "sites"
     ui.banner(root, args.kind)
     description = "application logs" if args.kind == "logs" else "application caches"
     started = time.monotonic()
     status = 0
+    keep_result_open = False
     try:
         if not args.dry_run and not args.yes:
             if not interactive:
@@ -441,6 +567,7 @@ def main():
                     return 0
                 if choice in ("1", "2"):
                     args.dry_run = choice == "2"
+                    keep_result_open = True
                     break
                 print("  Enter 1, 2, or Q.")
         project_root = Path(os.path.abspath(__file__)).parents[2]
@@ -448,21 +575,29 @@ def main():
         ui.open_log(report_path)
         mode = "PREVIEW — application files will stay unchanged" if args.dry_run else "CLEAN — removing " + description
         ui({"level": "INFO", "message": mode})
-        ui({"level": "INFO", "message": "Full activity log: " + str(report_path)})
         ui({"level": "INFO", "message": "Scanning apps and cache locations…"})
         plan = build_plan(root, ui, kind=args.kind)
         ui({"level": "INFO", "message": "{} apps found · {} cleanup locations".format(len(plan.apps), len(plan.targets))})
+        before = None if args.dry_run else read_disk_usage(root)
         stats = execute_plan(plan, args.dry_run, ui)
-        ui.clear_progress()
+        # Capture the result immediately after work, before formatting the output.
+        if args.dry_run:
+            before, after = read_disk_usage(root), None
+        else:
+            after = read_disk_usage(root)
+        ui.show_summary()
         print()
         title = "PREVIEW COMPLETE" if args.dry_run else "CLEANUP COMPLETE"
         if stats.errors:
             title = "PREVIEW FINISHED WITH ERRORS" if args.dry_run else "CLEANUP FINISHED WITH ERRORS"
         print(ui.paint("  " + title, "1;33" if stats.errors else "1;32"))
-        summary = "{} files {} · {} file data · {:.1f}s · {} errors".format(stats.files, "would be removed" if args.dry_run else "removed", human_size(stats.bytes), time.monotonic() - started, stats.errors)
+        ui.show_disk_summary(before, stats, args.dry_run, after)
+        summary = "{:,} files {} · {:.1f}s · {} errors".format(stats.files, "in preview" if args.dry_run else "removed", time.monotonic() - started, stats.errors)
         ui({"level": "INFO", "message": summary})
         ui({"level": "INFO", "message": "{} links / protected items skipped. Cache roots and keep files retained.".format(stats.skipped)})
-        print("  Full report: {}\n".format(printable(report_path)))
+        if stats.errors > 3:
+            print("  Additional errors were saved to: {}".format(printable(report_path)))
+        print()
         status = 1 if stats.errors else 0
     except KeyboardInterrupt:
         ui({"level": "INFO", "message": "Stopped. Completed deletions are recorded in the activity log."})
@@ -472,9 +607,12 @@ def main():
         status = 1
     finally:
         ui.close()
-        if pause:
+        # Finder may close Terminal as soon as the process exits. Keep the
+        # completed summary visible; only menu-launched runs wait for a close.
+        if keep_result_open:
+            sys.stdout.flush()
             try:
-                input("  Press Return to finish… ")
+                input("  Press Enter to close this window. ")
             except (EOFError, KeyboardInterrupt):
                 pass
     return status
