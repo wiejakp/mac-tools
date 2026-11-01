@@ -1,0 +1,24 @@
+---
+description: Project privacy, local CCE/context-mode use and agent workflow.
+alwaysApply: true
+---
+
+Read [AGENTS.md](../../AGENTS.md) before working. Apply the physical skills in
+`.agents/skills/`, especially `mac-helper`, `cce-maintenance` and
+`agent-orchestration` when relevant. Use the project's native `make` targets.
+
+Use local CCE for semantic repository retrieval and local context-mode (CTX) for
+large output and session context. Confirm `git rev-parse --show-toplevel` equals
+the MCP server's project before persistent operations. Never use another
+repository's index or a remote analysis/embedding service. Never index secrets.
+Process large data locally; return only the useful result. If transport is down,
+report that limitation and use bounded local CLI output without claiming success.
+
+Work inline by default. Delegate only with current explicit authorization. Keep
+private project data local except for the assistant provider the user explicitly
+selected for the session. Choosing this client is not permission for additional
+providers, cloud workers, remote MCP services or credential access.
+
+Before edits, write a change record with exact prior-state backups and guarded
+rollback. Verify changed behavior and run `make verify`. Do not run cleanup or
+connect to SMB servers as a test. See [client setup](../../docs/agent-clients.md).

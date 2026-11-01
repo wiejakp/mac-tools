@@ -1,0 +1,34 @@
+{
+  "positive_activation": [
+    "A task may use independent repository workers, translation shards, or coordinated final verification.",
+    "A request asks to decide whether parallel work is justified or how it should be bounded."
+  ],
+  "negative_activation": [
+    "A known small one-file change with no useful parallel work.",
+    "A task that lacks current user authorization for subagent delegation."
+  ],
+  "neighboring_skill_discrimination": [
+    "Load the domain, localization, testing, Bootstrap, or security skill alongside this orchestration policy; this skill does not replace their task-specific contracts."
+  ],
+  "workflow_application": [
+    "Apply the hard gate and score before dispatching a worker, then give a bounded context packet and declared scope.",
+    "Freeze English, fingerprint it, and delegate translation work to workers with disjoint locale files before using the five-worker exception.",
+    "Keep final integration, environment isolation, paired full-suite scheduling, and combined result review in the main coordinator."
+  ],
+  "failure_or_edge_case": [
+    "Treat a changed English fingerprint, shared locale file, unavailable worker model, or scope expansion as a reason to keep work in the parent or stop the worker.",
+    "If test environment and default application environment isolation is not proven, do not run the two isolated full-suite workers concurrently.",
+    "Preserve and group all paired complete-suite failures, repair them with targeted tests, and rerun the pair only after the known failure set is resolved."
+  ],
+  "reference_validation": [
+    "Confirm expected_references exactly matches the directly linked topical Markdown references and no forbidden reference is loaded."
+  ],
+  "expected_references": [
+    "references/decision-gate-and-roles.md",
+    "references/context-translation-and-handoffs.md",
+    "references/testing-planning-and-completion.md"
+  ],
+  "forbidden_references": [
+    "references/automatic-delegation.md"
+  ]
+}

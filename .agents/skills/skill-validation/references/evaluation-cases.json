@@ -1,0 +1,42 @@
+{
+  "positive_activation": [
+    "A request matching Use when creating, migrating, validating, or auditing repository AI skills.",
+    "A request requiring a documented outcome in the skill-validation router or its topical references."
+  ],
+  "negative_activation": [
+    "An unrelated request outside the skill-validation trigger family.",
+    "A generic repository request that requires no specialized skill workflow."
+  ],
+  "neighboring_skill_discrimination": [
+    "Distinguish skill-validation from adjacent canonical skills and load only references required by the requested outcome."
+  ],
+  "workflow_application": [
+    "Apply skill-validation through its canonical router and all selected reference verification rules.",
+    "Save a durable, status-labelled Superpowers plan before drafting or sending an approval prompt, including Reply approve and I'll implement.",
+    "Before requesting user approval for a requested change, save a durable, status-labelled Superpowers plan with granular, individually checkable implementation and validation items.",
+    "When a user explicitly asks to write, create, prepare, or make a plan, save that plan in the same turn even when implementation is not requested.",
+    "Treat a request to plan and implement, or an equivalent combined request, as explicit implementation authority after the durable plan is saved; do not request a duplicate approval.",
+    "Require a traceability table, concrete examples, granular checkboxes, delegation schedule, and completion reconciliation in a requested plan."
+  ],
+  "failure_or_edge_case": [
+    "Follow an exception, prohibition, recovery, or safety rule from the selected topical reference.",
+    "Must not start, resume, assign work to, or message a subagent unless the current user request explicitly authorizes subagent delegation. A plan, plan approval, or general implementation approval does not authorize delegation.",
+    "Delegate translation work only after English is frozen and locale ownership is disjoint; never race a shared locale file.",
+    "Run two isolated full-suite workers only after test environment and default application environment isolation is proven.",
+    "Keep a task active through plan and approval checkpoints; use commentary for non-terminal updates and a final response only after verified completion or a genuine blocker.",
+    "When approval is pending, retain the proposed plan and do not begin approval-gated work; after approval, resume from that plan and mark items complete only with executable evidence.",
+    "Ask for approval only when the user requested solely a plan or design, or when a material decision remains unresolved.",
+    "A focused suite is green but make test fails after PHPUnit: lead with FAILED and the failed phase, not a qualified task-complete claim.",
+    "No fresh canonical result exists after the final executable edit: report NOT RUN as unresolved and never reuse old successful reports."
+  ],
+  "reference_validation": [
+    "Confirm expected_references exactly matches the directly linked topical Markdown references and no forbidden reference is loaded."
+  ],
+  "expected_references": [
+    "references/final-verification.md",
+    "references/validation-contract.md"
+  ],
+  "forbidden_references": [
+    "references/source-preservation-dump.md"
+  ]
+}

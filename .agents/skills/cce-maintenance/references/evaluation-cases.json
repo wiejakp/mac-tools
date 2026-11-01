@@ -1,0 +1,31 @@
+{
+  "positive_activation": [
+    "A request matching Use when using, validating, or refreshing the local Code Context Engine.",
+    "A request requiring a documented outcome in the cce-maintenance router or its topical references."
+  ],
+  "negative_activation": [
+    "An unrelated request outside the cce-maintenance trigger family.",
+    "A generic repository request that requires no specialized skill workflow."
+  ],
+  "neighboring_skill_discrimination": [
+    "Distinguish cce-maintenance from adjacent canonical skills and load only references required by the requested outcome."
+  ],
+  "workflow_application": [
+    "Apply cce-maintenance through its canonical router and all selected reference verification rules."
+  ],
+  "failure_or_edge_case": [
+    "Follow an exception, prohibition, recovery, or safety rule from the selected topical reference."
+  ],
+  "reference_validation": [
+    "Confirm expected_references exactly matches the directly linked topical Markdown references and no forbidden reference is loaded."
+  ],
+  "expected_references": [
+    "references/isolation-and-retrieval.md",
+    "references/path-refresh-workflows.md",
+    "references/worktrees-health-and-safety.md",
+    "references/commands-and-completion.md"
+  ],
+  "forbidden_references": [
+    "references/other-repository-index.md"
+  ]
+}

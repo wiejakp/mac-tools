@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "cce-tools": {
+      "command": "cce",
+      "args": ["serve", "--project-dir", "/Users/pwiejak/Desktop/tools"],
+      "cwd": "/Users/pwiejak/Desktop/tools",
+      "env": {
+        "HF_HUB_OFFLINE": "1",
+        "TRANSFORMERS_OFFLINE": "1",
+        "HF_HUB_DISABLE_TELEMETRY": "1"
+      }
+    },
+    "context-mode": {
+      "command": "context-mode",
+      "cwd": "/Users/pwiejak/Desktop/tools",
+      "env": {"CONTEXT_MODE_PLATFORM": "cursor"}
+    }
+  }
+}

@@ -1,5 +1,54 @@
 # Local Scripts
 
+Run `make codex` to open Codex's chat list for this repository with automatic
+approval review. This uses the same direct Codex command as `~/sites/app_hublist`,
+with the workspace-write sandbox, network access, guardian approval, and hooks
+enabled. `CODEX` can override the executable, for example `make codex CODEX=/path/to/codex`.
+
+Agent onboarding starts in [AGENTS.md](AGENTS.md) and the [agent guide](docs/agent-guide.md).
+The Mac helper files live directly in `.agents/skills/mac-helper` for local
+skill discovery. Every change requires a local record, prior-state backup and
+explicit rollback steps.
+
+`make agent` starts Cursor Agent; `make gemini` starts Gemini CLI. Both use the
+same direct recipes as `app_hublist`. CCE and context-mode are required local
+tools for every coding client. See [client installation, usage and hook repair](docs/agent-clients.md)
+for prerequisites, project configuration, verification and rollback.
+
+`make clear cache` / `make clear-cache` and `make clear logs` / `make clear-logs`
+open the existing cleanup menus and require their normal confirmation. Use
+`make preview-cache` or `make preview-logs` for previews. `make mount`,
+`make mount-home`, and `make mount-cch` run the corresponding interactive tools.
+`make help` lists the shortcuts. No cleanup runs while testing these targets.
+
+For local AI-agent setup, `./agent-setup.sh --help` lists the available repairs.
+`./agent-setup.sh --repair-context-mode /absolute/path/to/plugin --dry-run`
+previews npm command symlinks that Codex cannot package for hooks. Add `--yes`
+to replace them with executable forwarders; original link metadata is saved in
+ignored `logs/agent-setup-backups/`. No packages are downloaded or removed.
+After a package repair, approve its changed hooks through Codex's native approval
+flow. Re-run the preview after a plugin update, since an update may restore npm
+symlinks. Exit codes: 0 success, 1 rejected/failed operation, 2 invalid arguments.
+
+`./agent-setup.sh --share-skills --dry-run` previews consolidation of personal
+skills into `~/.agents/skills`. Apply with `--yes`. Codex keeps compatibility
+links and its managed `.system`; Claude Code and Gemini receive discovery links
+to the same library. Existing names that conflict stop the install before any
+move. Original instructions and link/move metadata are backed up under
+`~/.agents/backups/`. Provider-specific hooks and MCP configuration remain separate.
+The portable [Mac helper skill](.agents/skills/mac-helper/SKILL.md) includes local tool
+diagnostics and the Superpowers design/plan/execution workflow.
+
+`./agent-setup.sh --inventory` prints sanitized OS, hardware, and relevant agent
+availability. Add `--yes` to save ignored `config/mac-helper.local.json`. It does
+not collect serial numbers, credentials, network identifiers, or file inventories.
+
+CCE must use this exact Git root. Its initial setup can register local stdio MCP
+through `cce init --agent codex`; normal updates use `cce index --path <changed-path>`.
+New registrations require a fresh agent session. If context-mode reports another
+project root, stop using that server's memory/file tools and restart from this
+repository. Do not expand cross-project permissions to mask a stale session.
+
 Personal automation tools with shared code, fixture tests and instructions for AI coding agents. Everything runs locally; no AI service, account, network access or package installation is needed to run the cleaners.
 
 ## Available scripts

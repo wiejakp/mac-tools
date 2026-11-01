@@ -1,0 +1,29 @@
+{
+  "mcpServers": {
+    "cce-tools": {
+      "command": "cce",
+      "args": ["serve", "--project-dir", "/Users/pwiejak/Desktop/tools"],
+      "cwd": "/Users/pwiejak/Desktop/tools",
+      "env": {
+        "HF_HUB_OFFLINE": "1",
+        "TRANSFORMERS_OFFLINE": "1",
+        "HF_HUB_DISABLE_TELEMETRY": "1"
+      }
+    },
+    "context-mode": {
+      "command": "context-mode",
+      "cwd": "/Users/pwiejak/Desktop/tools",
+      "env": {"CONTEXT_MODE_PLATFORM": "gemini-cli"}
+    }
+  },
+  "hooks": {
+    "BeforeTool": [{
+      "matcher": "run_shell_command|read_file|read_many_files|grep_search|search_file_content|web_fetch|activate_skill|mcp__.*context.mode|ctx_execute|ctx_execute_file|ctx_batch_execute",
+      "hooks": [{"type": "command", "command": "context-mode hook gemini-cli beforetool"}]
+    }],
+    "AfterTool": [{"matcher": "", "hooks": [{"type": "command", "command": "context-mode hook gemini-cli aftertool"}]}],
+    "AfterModel": [{"matcher": "", "hooks": [{"type": "command", "command": "context-mode hook gemini-cli aftermodel"}]}],
+    "PreCompress": [{"matcher": "", "hooks": [{"type": "command", "command": "context-mode hook gemini-cli precompress"}]}],
+    "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "context-mode hook gemini-cli sessionstart"}]}]
+  }
+}
